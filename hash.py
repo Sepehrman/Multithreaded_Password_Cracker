@@ -5,7 +5,6 @@ import time
 import concurrent.futures
 import warnings
 import multiprocessing
-from mutlithreaded_hash import MultithreadedHash
 from request import Request
 from hash_guesser import HashGuesser
 
@@ -23,12 +22,17 @@ def define_arguments():
     parser.add_argument("-t", "--threads", help=f"The number of threads we would like to run the program on. "
                                                 "Defaults to the current machine's number of CPU Cores",
                         default=multiprocessing.cpu_count())
+    parser.add_argument('--time', help='The shadow file we want to crack the password of.')
+    parser.add_argument('--trials', help='The shadow file we want to crack the password of.')
+
 
     request = Request()
     args = parser.parse_args()
     request.file = args.file
     request.users = args.users
     request.threads = int(args.threads)
+    request.time = args.time
+    request.trials = args.trials
 
     errors = []
     
@@ -99,7 +103,7 @@ def partition_letters(a, n):
         return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))
 
 
-def start_cracking_given_letters(guessers, letters):
+def start_cracking_given_letters(guessers, letters, request):
     letters_length = 1
     for hash_guesser in guessers:
         start = time.time()
@@ -115,7 +119,7 @@ def initiate_multithreaded_cracking(request, partitioned_letters, guessers):
     with concurrent.futures.ThreadPoolExecutor(max_workers=request.threads) as executor:
         for letters in partitioned_letters:
             with lock:
-                executor.submit(start_cracking_given_letters, guessers, letters)
+                executor.submit(start_cracking_given_letters, guessers, letters, request)
 
 
 def show_results(guessers):
@@ -132,6 +136,8 @@ def main():
     find_lines(request, hashed_lines)
     generate_guessers(hashed_lines, guessers)
     partitioned_letters = partition_letters(list(string.ascii_letters), request.threads)
+    
+    print("Cracking Passwords. Please allow a few seconds...")
     initiate_multithreaded_cracking(request, partitioned_letters, guessers)
     
     show_results(guessers)

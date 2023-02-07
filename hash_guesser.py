@@ -19,7 +19,7 @@ class HashGuesser:
         return f'"{self.username}" is using the "{self.hashing_type}" hashing algorithm.\n' \
                f'Cracked Password: "{self.cracked_password}"\n' \
                f'Number of trials: {self.tries}\n' \
-               f'Time taken: {self.time_taken:.3f} (seconds)\n'
+               f'Time taken: {self.time_taken:.6f} (seconds)\n'
 
     def crack_hash(self, char_list, n, empty_list=[]):
         guess = crypt.crypt(''.join(empty_list), self.hashed_password)
