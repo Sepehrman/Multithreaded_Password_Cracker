@@ -1,5 +1,6 @@
 import argparse
 import string
+import threading
 import time
 import concurrent.futures
 import warnings
@@ -11,6 +12,8 @@ from hash_guesser import HashGuesser
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     import crypt
+
+lock = threading.Lock()
 
 
 def define_arguments():
@@ -27,24 +30,28 @@ def define_arguments():
     request.users = args.users
     request.threads = int(args.threads)
 
+    errors = []
     
-    if (len(request.users) == 0 or request.users is None) and request.file is None:
-        print("Must include the following argument -f/--file and must include usernames")
-        quit()
+    if request.file is None:
+        errors.append("Must include a file with the following argument -f/--file")
 
     if len(request.users) == 0 or request.users is None:
-        print("Must include username(s)")
-        quit()
+        errors.append("Must include username(s)")
 
     if request.file is None:
-        print("Must include a shadow fie to look at the hash")
-        quit()
+        errors.append("Must include a shadow fie to look at the hash")
 
-
-    print(request)
+    if len(errors) > 0:
+        display_errors(errors)
 
     return request
 
+
+
+def display_errors(errors):
+    for error in errors:
+        print(f'-\t{error}')
+    quit()
 
 def extract_etc_shadow(hashed_line):
     info_array = hashed_line.split(":")
@@ -92,23 +99,30 @@ def partition_letters(a, n):
         return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))
 
 
-def start_cracking(guessers: list[HashGuesser]):
-    print("Cracking Process initiated..,")
-    print("----------------RESULTS----------------")
+def start_cracking_given_letters(guessers, letters):
     letters_length = 1
     for hash_guesser in guessers:
         start = time.time()
         while hash_guesser.cracked_password is None:
-            hash_guesser.crack_hash(list(string.ascii_letters), letters_length)
+            hash_guesser.crack_hash(list(letters), letters_length)
             letters_length += 1
         elapsed = time.time()
         hash_guesser.time_taken = elapsed - start
         letters_length = 1
-        print(hash_guesser)
 
 
-def thread_function(letters):
-    print(f"ALL {letters}")
+def initiate_multithreaded_cracking(request, partitioned_letters, guessers):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=request.threads) as executor:
+        for letters in partitioned_letters:
+            with lock:
+                executor.submit(start_cracking_given_letters, guessers, letters)
+
+
+def show_results(guessers):
+    print("----------- RESULTS -----------")
+
+    for guess in guessers:
+        print(guess)
 
 def main():
     request = define_arguments()
@@ -118,17 +132,9 @@ def main():
     find_lines(request, hashed_lines)
     generate_guessers(hashed_lines, guessers)
     partitioned_letters = partition_letters(list(string.ascii_letters), request.threads)
-
-    multithreads = MultithreadedHash(request)
+    initiate_multithreaded_cracking(request, partitioned_letters, guessers)
     
-    
-    # ADD '' TO START OF ALL ELEMENTS WHEN STARTING, THEN add a, then b, then c to the start
-    with concurrent.futures.ThreadPoolExecutor(max_workers=request.threads) as executor:
-        for index in partitioned_letters:
-            # PARTITIONING 4 THREADS (Order in which they print doesn't matter)
-            executor.submit(multithreads.get_next, index)
-
-    # start_cracking(guessers)
+    show_results(guessers)
 
 
 if __name__ == '__main__':
